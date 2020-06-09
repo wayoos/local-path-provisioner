@@ -41,6 +41,8 @@ spec:
           env:
             - name: POD_NAMESPACE
               value: {{ .Release.Namespace }}
+              - name: USE_LOCAL_VOLUME
+              value: {{ .Values.useLocalVolume }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
