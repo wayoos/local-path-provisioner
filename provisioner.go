@@ -39,10 +39,11 @@ var (
 )
 
 type LocalPathProvisioner struct {
-	stopCh      chan struct{}
-	kubeClient  *clientset.Clientset
-	namespace   string
-	helperImage string
+	stopCh         chan struct{}
+	kubeClient     *clientset.Clientset
+	namespace      string
+	helperImage    string
+	useLocalVolume bool
 
 	config      *Config
 	configData  *ConfigData
@@ -67,13 +68,14 @@ type Config struct {
 	NodePathMap map[string]*NodePathMap
 }
 
-func NewProvisioner(stopCh chan struct{}, kubeClient *clientset.Clientset, configFile, namespace, helperImage string) (*LocalPathProvisioner, error) {
+func NewProvisioner(stopCh chan struct{}, kubeClient *clientset.Clientset, configFile, namespace, helperImage string, useLocalVolume bool) (*LocalPathProvisioner, error) {
 	p := &LocalPathProvisioner{
 		stopCh: stopCh,
 
-		kubeClient:  kubeClient,
-		namespace:   namespace,
-		helperImage: helperImage,
+		kubeClient:     kubeClient,
+		namespace:      namespace,
+		helperImage:    helperImage,
+		useLocalVolume: useLocalVolume,
 
 		// config will be updated shortly by p.refreshConfig()
 		config:      nil,
@@ -197,7 +199,22 @@ func (p *LocalPathProvisioner) Provision(opts pvController.ProvisionOptions) (*v
 	}
 
 	fs := v1.PersistentVolumeFilesystem
-	//	hostPathType := v1.HostPathDirectoryOrCreate
+
+	var persistentVolumeSource v1.PersistentVolumeSource
+	if p.useLocalVolume {
+		persistentVolumeSource = v1.PersistentVolumeSource{
+			Local: &v1.LocalVolumeSource{
+				Path: path,
+			}}
+	} else {
+		hostPathType := v1.HostPathDirectoryOrCreate
+		persistentVolumeSource = v1.PersistentVolumeSource{
+			HostPath: &v1.HostPathVolumeSource{
+				Path: path,
+				Type: &hostPathType,
+			}}
+	}
+
 	return &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -209,15 +226,7 @@ func (p *LocalPathProvisioner) Provision(opts pvController.ProvisionOptions) (*v
 			Capacity: v1.ResourceList{
 				v1.ResourceName(v1.ResourceStorage): pvc.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)],
 			},
-			PersistentVolumeSource: v1.PersistentVolumeSource{
-				// HostPath: &v1.HostPathVolumeSource{
-				// 	Path: path,
-				// 	Type: &hostPathType,
-				// },
-				Local: &v1.LocalVolumeSource{
-					Path: path,
-				},
-			},
+			PersistentVolumeSource: persistentVolumeSource,
 			NodeAffinity: &v1.VolumeNodeAffinity{
 				Required: &v1.NodeSelector{
 					NodeSelectorTerms: []v1.NodeSelectorTerm{

@@ -28,6 +28,8 @@ var (
 	FlagHelperImage        = "helper-image"
 	EnvHelperImage         = "HELPER_IMAGE"
 	DefaultHelperImage     = "busybox"
+	FlagUseLocalVolume     = "use-local-volume"
+	EnvUseLocalVolume      = "USE_LOCAL_VOLUME"
 )
 
 func cmdNotFound(c *cli.Context, command string) {
@@ -75,6 +77,11 @@ func StartCmd() cli.Command {
 				EnvVar: EnvHelperImage,
 				Value:  DefaultHelperImage,
 			},
+			cli.BoolFlag{
+				Name:   FlagUseLocalVolume,
+				Usage:  "Use local volume in place of host path volume.",
+				EnvVar: EnvUseLocalVolume,
+			},
 		},
 		Action: func(c *cli.Context) {
 			if err := startDaemon(c); err != nil {
@@ -120,7 +127,9 @@ func startDaemon(c *cli.Context) error {
 		return fmt.Errorf("invalid empty flag %v", FlagHelperImage)
 	}
 
-	provisioner, err := NewProvisioner(stopCh, kubeClient, configFile, namespace, helperImage)
+	useLocalVolume := c.Bool(FlagUseLocalVolume)
+
+	provisioner, err := NewProvisioner(stopCh, kubeClient, configFile, namespace, helperImage, useLocalVolume)
 	if err != nil {
 		return err
 	}
